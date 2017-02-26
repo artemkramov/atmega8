@@ -1,0 +1,1 @@
+avrdude -cusbasp -pm8 -e -U flash:w:sketch_Atmega8.cpp.hex

@@ -8,12 +8,11 @@
 // Copyright (C) 2008 Mike McCauley
 // $Id: transmitter.pde,v 1.3 2009/03/30 00:07:24 mikem Exp $
 
-#include <VirtualWire.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
 //  Variables
-int pulsePin = 0;                 // Pulse Sensor purple wire connected to analog pin 0
+int pulsePin = 1;                 // Pulse Sensor purple wire connected to analog pin 0
 int blinkPin = 13;                // pin to blink led at each beat
 int fadePin = 5;                  // pin to do fancy classy fading blink at each beat
 int fadeRate = 0;                 // used to fade LED on with PWM on fadePin
@@ -46,23 +45,18 @@ void interruptSetup() {
 void setup()
 {
   pinMode(blinkPin, OUTPUT);        // pin that will blink to your heartbeat!
-  Serial.begin(115200);             // we agree to talk fast!
+  Serial.begin(38600);             // we agree to talk fast!
   // Initialise the IO and ISR
-  Serial.println(F_CPU);
-  vw_set_ptt_inverted(true); // Required for DR3100
-  vw_set_tx_pin(12);
-  vw_setup(2000); // Bits per sec
   interruptSetup();
 }
 
 void loop()
 {
-  //  const char *msg = "Artem Kramov";
-  //  digitalWrite(13, true); // Flash a light to show transmitting
-  //  vw_send((uint8_t *)msg, strlen(msg));
-  //  vw_wait_tx(); // Wait until the whole message is gone
-  //  digitalWrite(13, false);
-  //  delay(200);
+  if (QS == true) {
+    QS = false;
+    const char *msg = "1";
+    Serial.write("1");
+  }
 }
 
 // THIS IS THE TIMER 2 INTERRUPT SERVICE ROUTINE.
@@ -86,13 +80,27 @@ ISR(TIMER2_COMP_vect) {                        // triggered when Timer2 counts t
 
   //  NOW IT'S TIME TO LOOK FOR THE HEART BEAT
   // signal surges up in value every time there is a pulse
-  if (N > 250) {                                  // avoid high frequency noise
+  if (N > 350) {                                  // avoid high frequency noise
     if ( (Signal > thresh) && (Pulse == false) && (N > (IBI / 5) * 3) ) {
       Pulse = true;                               // set the Pulse flag when we think there is a pulse
       digitalWrite(blinkPin, HIGH);               // turn on pin 13 LED
       IBI = sampleCounter - lastBeatTime;         // measure time between beats in mS
       lastBeatTime = sampleCounter;               // keep track of time for next pulse
 
+      if(secondBeat){                        // if this is the second beat, if secondBeat == TRUE
+        secondBeat = false;                  // clear secondBeat flag
+        for(int i=0; i<=9; i++){             // seed the running total to get a realisitic BPM at startup
+          rate[i] = IBI;
+        }
+      }
+
+      if(firstBeat){                         // if it's the first time we found a beat, if firstBeat == TRUE
+        firstBeat = false;                   // clear firstBeat flag
+        secondBeat = true;                   // set the second beat flag
+        sei();                               // enable interrupts again
+        return;                              // IBI value is unreliable so discard it
+      }
+      
       QS = true;                              // set Quantified Self flag
       // QS FLAG IS NOT CLEARED INSIDE THIS ISR
     }
