@@ -23,22 +23,43 @@ volatile int Signal;                // holds the incoming raw data
 volatile int IBI = 600;             // int that holds the time interval between beats! Must be seeded!
 volatile boolean Pulse = false;     // "True" when User's live heartbeat is detected. "False" when not a "live beat".
 volatile boolean QS = false;        // becomes true when Arduoino finds a beat.
+volatile long tester = 0;
+volatile boolean tester1 = false;
 
 volatile int rate[10];                    // array to hold last ten IBI values
 volatile unsigned long sampleCounter = 0;          // used to determine pulse timing
 volatile unsigned long lastBeatTime = 0;           // used to find IBI
 volatile int P = 512;                     // used to find peak in pulse wave, seeded
 volatile int T = 512;                     // used to find trough in pulse wave, seeded
-volatile int thresh = 525;                // used to find instant moment of heart beat, seeded
+volatile int thresh = 512;                // used to find instant moment of heart beat, seeded
 volatile int amp = 100;                   // used to hold amplitude of pulse waveform, seeded
 volatile boolean firstBeat = true;        // used to seed rate array so we startup with reasonable BPM
 volatile boolean secondBeat = false;      // used to seed rate array so we startup with reasonable BPM
 
 void interruptSetup() {
-   TIMSK |= (1 << OCIE2);
-   TCCR2 |= (1 << WGM21);
-   TCCR2 |= (1 << CS21) | (1 << CS22);
-   OCR2 = 124;
+//   TIMSK |= (1 << OCIE2);
+//   TCCR2 |= (1 << WGM21);
+//   TCCR2 |= (1 << CS21) | (1 << CS22);
+//   OCR2 = 124;
+
+
+//  TIMSK = (1<<OCIE2) | (0<<TOIE2);
+//  // Sets the compare value
+//  OCR2 = 124;
+//  TCCR2 = (0<<FOC2)|(1<<WGM21)|(1<<WGM20)|(1<<COM21)|(0<<COM20)|(0<<CS20)|(1<<CS21)|(1<<CS22);
+
+  // set up timer with prescaler = 64 and CTC mode
+    TCCR1B |= (0 << WGM12)|(1 << CS11)|(1 << CS10) | (1 << WGM13);
+
+    // initialize counter
+    TCNT1 = 0;
+
+    // initialize compare value
+    OCR1A = 512;
+
+    // enable compare interrupt
+    TIMSK |= (1 << OCIE1A); 
+
    sei();
 }
 
@@ -61,12 +82,14 @@ void loop()
 
 // THIS IS THE TIMER 2 INTERRUPT SERVICE ROUTINE.
 // Timer 2 makes sure that we take a reading every 2 miliseconds
-ISR(TIMER2_COMP_vect) {                        // triggered when Timer2 counts to 124
+ISR(TIMER1_COMPA_vect) {                        // triggered when Timer2 counts to 124
   cli();                                      // disable interrupts while we do this
+  
   Signal = analogRead(pulsePin);              // read the Pulse Sensor
   sampleCounter += 2;                         // keep track of the time in mS with this variable
   int N = sampleCounter - lastBeatTime;       // monitor the time since the last beat to avoid noise
- 
+  
+  
   //  find the peak and trough of the pulse wave
   if (Signal < thresh && N > (IBI / 5) * 3) { // avoid dichrotic noise by waiting 3/5 of last IBI
     if (Signal < T) {                       // T is the trough
@@ -80,7 +103,7 @@ ISR(TIMER2_COMP_vect) {                        // triggered when Timer2 counts t
 
   //  NOW IT'S TIME TO LOOK FOR THE HEART BEAT
   // signal surges up in value every time there is a pulse
-  if (N > 350) {                                  // avoid high frequency noise
+  if (N > 250) {                                  // avoid high frequency noise
     if ( (Signal > thresh) && (Pulse == false) && (N > (IBI / 5) * 3) ) {
       Pulse = true;                               // set the Pulse flag when we think there is a pulse
       digitalWrite(blinkPin, HIGH);               // turn on pin 13 LED
